@@ -3,31 +3,14 @@ import torch.nn as nn
 import torch
 
 class DeepSetDecoder(nn.Module):
-
-    def __init__(self, batch_size, latent_dim, hidden_dim, output_dim):
+    def __init__(self, latent_dim=8, hidden_dim=16):
         super(DeepSetDecoder, self).__init__()
-
-        self.latent_to_hidden = nn.Sequential(
+        self.decoder = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim, hidden_dim)
+            nn.Linear(hidden_dim, 1),
+            nn.ReLU() 
         )
-        
-        # Element generator network
-        self.element_generator = nn.Sequential(
-            nn.Linear(hidden_dim + latent_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim, batch_size)
-        )
-
+            
     def forward(self, x):
-        hidden = self.latent_to_hidden(x)
-        combined = torch.cat([hidden, x], dim=0)
-        output_set = self.element_generator(combined)
-        return output_set
-    
+        return self.decoder(x).squeeze(-1)
