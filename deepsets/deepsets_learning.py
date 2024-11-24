@@ -8,8 +8,11 @@ from torch.utils.data import TensorDataset, DataLoader
 from portfolio_dataset import PortfolioDataset
 from early_stopping import EarlyStopping
 from option_data import generate_option_prices
+from comet_ml import start
+from comet_ml.integration.pytorch import log_model
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+experiment = start(api_key="iatWnXT4JyBtDQhn7OfgISQoF", project_name="option-portfolio-encoder-decoder", workspace="satyabratkumarsingh")
 
 input_dim = 2
 hidden_dim = 16
@@ -48,6 +51,13 @@ def main():
     optimizer = optim.Adam(list(encoder.parameters()) + list(decoder.parameters()),
                         lr=0.000001)
 
+    hyper_params = {
+            "learning_rate": 0.000001,
+            "steps": 1000,
+            "batch_size": 32,
+        }
+    experiment.log_parameters(hyper_params)
+
     # INPUT a tensor for call option with S(T), X 
     s_t_prices, x_prices, cashflows = generate_option_prices(100000, 99, 110)
 
@@ -55,7 +65,6 @@ def main():
 
     cashflow_tensor = torch.tensor(cashflows).float()
 
-    option_dataset = TensorDataset(option_tensor, cashflow_tensor)
 
     # Create dataset and data loader
     dataset = PortfolioDataset(option_tensor, cashflow_tensor)
@@ -82,7 +91,7 @@ def main():
         avg_loss = np.mean(epoch_losses)
         losses.append(avg_loss)
         if epoch % 10 == 0:
-            print(f'Epoch [{epoch}/{epochs}], Loss: {avg_loss:.4f}')
+            print(f'Epoch [{epoch}/{epochs}], Loss: {avg_loss:.6f}')
         early_stopping(avg_loss)
 
         if avg_loss < best_loss:
@@ -96,6 +105,9 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': best_loss,
             }, 'best_model.pt')
+            log_model(experiment, model=encoder.state_dict(), model_name="Encoder")
+            log_model(experiment, model=decoder.state_dict(), model_name="Decoder")
+            log_model(experiment, model=optimizer.state_dict(), model_name="Optimizer")
             break
 
 if __name__ == "__main__":
