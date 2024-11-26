@@ -1,3 +1,5 @@
+from comet_ml import start
+from comet_ml.integration.pytorch import log_model
 import torch.nn as nn
 import torch.optim as optim
 import torch
@@ -8,8 +10,8 @@ from torch.utils.data import TensorDataset, DataLoader
 from portfolio_dataset import PortfolioDataset
 from early_stopping import EarlyStopping
 from option_data import generate_option_prices
-from comet_ml import start
-from comet_ml.integration.pytorch import log_model
+from portfolio_data import generate_portfolios
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 experiment = start(api_key="iatWnXT4JyBtDQhn7OfgISQoF", project_name="option-portfolio-encoder-decoder", workspace="satyabratkumarsingh")
@@ -24,13 +26,14 @@ def do_padding(orig_portfolio, batch_size, data_type):
     if orig_portfolio.size(0) < batch_size:
         if data_type == 'portfolio':
             rows_to_add = batch_size - orig_portfolio.size(0)
-            dummy_rows = torch.zeros(rows_to_add, orig_portfolio.size(1))
-            new_portfolio = torch.cat([orig_portfolio, dummy_rows], dim=0)
+            zero_row = torch.zeros((rows_to_add, orig_portfolio.size(1),
+                                    orig_portfolio.size(2))) 
+            new_portfolio = torch.cat([orig_portfolio, zero_row], dim=0)
             return new_portfolio
         else:
             rows_to_add = batch_size - orig_portfolio.size(0)
-            padding_tensor = torch.zeros(rows_to_add)
-            new_portfolio = torch.cat([orig_portfolio, padding_tensor])
+            zero_row = torch.zeros((rows_to_add, orig_portfolio.size(1)))
+            new_portfolio = torch.cat([orig_portfolio, zero_row])
             return new_portfolio
     else:
         return orig_portfolio
@@ -38,7 +41,6 @@ def do_padding(orig_portfolio, batch_size, data_type):
 def main():
     # Loss functions
     mse_loss = nn.MSELoss()
-    bce_loss = nn.BCELoss()
 
     encoder = DeepSetEncoder(input_dim=input_dim,
                             batch_size=batch_size,
@@ -49,31 +51,26 @@ def main():
                             hidden_dim=hidden_dim).to(DEVICE)
 
     optimizer = optim.Adam(list(encoder.parameters()) + list(decoder.parameters()),
-                        lr=0.000001)
+                        lr=0.0001)
 
     hyper_params = {
-            "learning_rate": 0.000001,
+            "learning_rate": 0.0001,
             "steps": 1000,
             "batch_size": 32,
         }
     experiment.log_parameters(hyper_params)
 
-    # INPUT a tensor for call option with S(T), X 
-    s_t_prices, x_prices, cashflows = generate_option_prices(100000, 99, 110)
-
-    option_tensor = torch.tensor(np.column_stack((s_t_prices, x_prices))).float()
-
-    cashflow_tensor = torch.tensor(cashflows).float()
-
+   
+    feature_tensor, cashflow_tensor = generate_portfolios(10000, 100)
 
     # Create dataset and data loader
-    dataset = PortfolioDataset(option_tensor, cashflow_tensor)
+    dataset = PortfolioDataset(feature_tensor, cashflow_tensor)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     losses = []
     best_loss = float('inf')
 
-    early_stopping = EarlyStopping(patience=21, min_delta=0.000001)
+    early_stopping = EarlyStopping(patience=21, min_delta=0.00001)
 
 
     for epoch in range(epochs):
@@ -82,9 +79,12 @@ def main():
             optimizer.zero_grad()
             portfolio_real = do_padding(portfolio_real, batch_size, 'portfolio')
             cashflows_real = do_padding(cashflows_real, batch_size, 'cashflow')
+            
             latent_rep = encoder(portfolio_real)
             predicted_cashflows = decoder(latent_rep)
+
             loss = mse_loss(predicted_cashflows, cashflows_real)
+            
             loss.backward()
             optimizer.step()
             epoch_losses.append(loss.item())
@@ -105,9 +105,9 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': best_loss,
             }, 'best_model.pt')
-            log_model(experiment, model=encoder.state_dict(), model_name="Encoder")
-            log_model(experiment, model=decoder.state_dict(), model_name="Decoder")
-            log_model(experiment, model=optimizer.state_dict(), model_name="Optimizer")
+            #log_model(experiment, model=encoder.state_dict(), model_name="Encoder")
+            #log_model(experiment, model=decoder.state_dict(), model_name="Decoder")
+            #log_model(experiment, model=optimizer.state_dict(), model_name="Optimizer")
             break
 
 if __name__ == "__main__":

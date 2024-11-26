@@ -13,4 +13,6 @@ class DeepSetDecoder(nn.Module):
         )
             
     def forward(self, x):
-        return self.decoder(x).squeeze(-1)
+        pooled = torch.sum(x, dim=1)
+        output = self.decoder(pooled)
+        return output

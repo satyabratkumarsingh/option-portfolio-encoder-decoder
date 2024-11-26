@@ -3,20 +3,14 @@ from deepsets_encoder import DeepSetEncoder
 from deepsets_decoder import DeepSetDecoder
 import numpy as np
 from deepsets_learning import input_dim, latent_dim, hidden_dim, batch_size, DEVICE
+from portfolio_data import generate_portfolios
 
 def main():
     print('==========TESTING MOIDDDL=====')
-    option_array = np.random.randint(low=90, high=95, size=(32, 2))
-    print(option_array)
-    option_tensor = torch.tensor(option_array).float()
-
-    #payoff  = max(S(T) - K, 0)
-    cashflows_array = np.maximum(option_array[:,0] - option_array[:,1], 0)
-    cashflow_tensor = torch.tensor(cashflows_array).float()
-    print(cashflow_tensor)
+    feature_tensor, cashflow_tensor = generate_portfolios(32, 10)
 
     encoder = DeepSetEncoder(input_dim=input_dim,
-                            batch_size=batch_size,
+                            batch_size=32,
                             latent_dim=latent_dim,
                             hidden_dim=hidden_dim).to(DEVICE)
 
@@ -36,12 +30,35 @@ def main():
     decoder.eval()
 
     with torch.no_grad():
-        latent = encoder(option_tensor)
+        latent = encoder(feature_tensor)
 
         predicted_cashflows = decoder(latent)
+
+        print('========= Actual Cashflow ========')
+        print(cashflow_tensor)
+        
         print('=========Predicted Cashflow ========')
         print(predicted_cashflows.shape)
         print("Predicted Cashflows:", predicted_cashflows)
+
+        # 1. Mean Absolute Error (MAE)
+        mae = torch.mean(torch.abs(predicted_cashflows - cashflow_tensor))
+        print(f"Mean Absolute Error (MAE): {mae.item():.4f}")
+
+        # 2. Mean Squared Error (MSE)
+        mse = torch.mean((predicted_cashflows - cashflow_tensor) ** 2)
+        print(f"Mean Squared Error (MSE): {mse.item():.4f}")
+
+        # 3. Root Mean Squared Error (RMSE)
+        rmse = torch.sqrt(mse)
+        print(f"Root Mean Squared Error (RMSE): {rmse.item():.4f}")
+
+        # 4. R-Squared
+        ss_total = torch.sum((cashflow_tensor - torch.mean(cashflow_tensor)) ** 2)
+        ss_residual = torch.sum((cashflow_tensor - predicted_cashflows) ** 2)
+        r2 = 1 - (ss_residual / ss_total)
+        print(f"R-Squared: {r2.item():.4f}")
+
 
 if __name__ == "__main__":
     main()

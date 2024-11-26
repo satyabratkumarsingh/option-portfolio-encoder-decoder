@@ -33,7 +33,6 @@ def generate_option_prices(n, min_price_range, max_price_range):
 
     X_prices = S_0_Prices * np.random.uniform(min_x_factor, max_x_factor, size=n) # Strike Prices
 
-    Cashflows = np.maximum(S_T_Prices - X_prices, 0)
-
-    return S_T_Prices, X_prices, Cashflows
+    Cashflows = np.maximum((S_T_Prices - X_prices), 0)
+    return S_T_Prices, X_prices, np.sum(Cashflows)
 
