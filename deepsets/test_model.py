@@ -59,6 +59,10 @@ def main():
         r2 = 1 - (ss_residual / ss_total)
         print(f"R-Squared: {r2.item():.4f}")
 
+        epsilon = 1e-8  # Small constant to prevent division by zero
+        mape = torch.mean(torch.abs((cashflow_tensor - predicted_cashflows) / (cashflow_tensor + epsilon))) * 100
+        print(f"MAPE: {mape.item():.4f}")
+
 
 if __name__ == "__main__":
     main()
